@@ -1,0 +1,4 @@
+.DS_Store
+basketball_data/
+runs/
+*.pt
