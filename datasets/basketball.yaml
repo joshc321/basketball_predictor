@@ -3,7 +3,7 @@ val: ./basketball_data/valid/images
 test: ./basketball_data/test/images
 
 nc: 2
-names: ['Basketball Hoop', 'Basketball']
+names: ['Basketball', 'Basketball Hoop']
 
 roboflow:
   workspace: 034-ganesh-kumar-m-v-cs-r2lwe
