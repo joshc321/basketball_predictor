@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from matplotlib import pyplot as plt
 import random
+import os
 
 def get_left_right_camera_idxs(cam_name: str = "C270 HD WEBCAM"):
     """
@@ -15,6 +16,9 @@ def get_left_right_camera_idxs(cam_name: str = "C270 HD WEBCAM"):
     Returns:
         [int, int] : camera numbers for left and right camera unordered
     """
+
+    if os.name == "nt":
+        return [0,1]
 
     command = ['ffmpeg','-f', 'avfoundation','-list_devices','true','-i','""']
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)

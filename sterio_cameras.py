@@ -8,6 +8,7 @@ import ultralytics
 from matplotlib import pyplot as plt
 import tools.camera_calibration.camera_calibration as camera_calibration
 from pathlib import Path
+import os
 
 
 class LogitechC270:
@@ -38,14 +39,17 @@ class LogitechC270:
         Initialize webcam and store properties
         """
 
-        self._cap = cv2.VideoCapture(cam_id, apiPreference=cv2.CAP_AVFOUNDATION)
-        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'avc1'))
+        if os.name == 'nt':
+            self._cap = cv2.VideoCapture(cam_id)
+        else:
+            self._cap = cv2.VideoCapture(cam_id, apiPreference=cv2.CAP_AVFOUNDATION)
+            self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'avc1'))
 
         
         self._width, self._height = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # wait for cameras to start
-        if type(cam_id) is str and len(cam_id) > 3:
+        if type(cam_id) is int:
             for _ in range(100):
                 success, img1 = self.read()
                 if success == False or (np.average(img1) > 0):
