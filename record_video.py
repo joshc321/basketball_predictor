@@ -13,13 +13,16 @@ def read_frames(cap, cap2, frame_queue, frame_queue2, stop_event, disp_queue, di
         cap2.grab()
 
         ret, frame = cap.retrieve()
-        frame = cv2.flip(frame, 0)
         ret2, frame2 = cap2.retrieve()
-        frame2 = cv2.flip(frame2, 0)
+        
         if not ret or not ret2:
             break
         frame_queue.put(frame)
         frame_queue2.put(frame2)
+
+        # flip frames upright to display
+        frame = cv2.flip(frame, -1)
+        frame2 = cv2.flip(frame2, -1)
         disp_queue.put(frame)
         disp_queue2.put(frame2)
 

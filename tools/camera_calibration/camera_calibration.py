@@ -449,6 +449,6 @@ if __name__ == '__main__':
 
     # rectify_images(mtxL, distL, mtxR, distR, R, T)
 
-    # draw_epilines(F)
+    draw_epilines(F)
 
-    triangulate(mtxL, mtxR, R, T)
+    # triangulate(mtxL, mtxR, R, T)

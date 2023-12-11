@@ -6,6 +6,8 @@ import collections
 import time
 from sterio_cameras import SterioCameras
 import numpy as np
+import matplotlib.pyplot as plt
+import ball_detector
 
 class PathPoint:
     
@@ -45,6 +47,8 @@ class ProjectileTracking:
 
         self.adjacency_list = {}
 
+        self.timeline = []
+
     def add_locations(self, x: np.ndarray, y: np.ndarray, z: np.ndarray, ptsOrigL: list, time_stamp: int) -> None:
         """
         Add a point to be tracked
@@ -60,11 +64,12 @@ class ProjectileTracking:
         for i in range(len(x)):
             new_loc = PathPoint(x[i],y[i],z[i],ptsOrigL[i],time_stamp)
             new_locs.append(new_loc)
+            self.timeline.append(new_loc)
 
         for point in self.adjacency_list.keys():
             for loc in new_locs:
                 speed = PathPoint.calc_speed(point, loc)
-                print('speed', speed / 1000, 'm/s')
+                # print('speed', speed / 1000, 'm/s')
 
                 if self.min_speed <= speed <= self.max_speed:
                     self.adjacency_list[point].add(new_loc)
@@ -92,73 +97,75 @@ class ProjectileTracking:
         for point in self.adjacency_list.keys():
             self.adjacency_list[point] = self.adjacency_list[point] - removed
 
+        for idx, point in enumerate(self.timeline):
+            if (curr_time - point.time_stamp) > self.max_time:
+                self.timeline = self.timeline[idx:]
+
         self.last_clean_time = curr_time
 
     def get_lines(self) -> list[tuple[tuple[int, int]]]:
 
         lines = []
 
-        for start_node, end_list in self.adjacency_list.items():
+        # for start_node, end_list in self.adjacency_list.items():
 
-            for node in end_list:
-                lines.append( (( start_node.orig[0], start_node.orig[1] ), (node.orig[0], node.orig[1])) )
+        #     for node in end_list:
+        #         lines.append( (( start_node.orig[0], start_node.orig[1] ), (node.orig[0], node.orig[1])) )
+
+        for i in range(1, len(self.timeline)):
+            lineL = self.timeline[i - 1]
+            lineR = self.timeline[i]
+
+            lines.append( (( lineL.orig[0], lineL.orig[1] ), (lineR.orig[0], lineR.orig[1])) )
 
         return lines
 
 
 
-model = YOLO(f'{Path(__file__).parent}/best-mps.pt')
-model.to(device='mps')
-sterio_pair = SterioCameras()
+def tracking_stream(sterio_pair: SterioCameras) -> None:
 
-ball_centers = collections.deque(maxlen=20)
-
-
-def tracking_stream(sterio_pair: SterioCameras, classifier: YOLO) -> None:
-
-    tracking = ProjectileTracking(2.0, 1.5, 3.5)
-
+    tracking = ProjectileTracking(2.0, 1, 10)
+    detector = ball_detector.HoughBallDetector(2, minRadius=16, maxRadius=35)
+    # pts3_all = [[],[],[]]
+    pts3_all = []
 
     def clsffy(imgL, imgR):
 
-        # result = classifier.predict([imgL, imgR], iou=0.7, conf=0.75)
-        # result = classifier1.predict(imgL)
-        # result1 = classifier2.track(imgR, persist=True, tracker="bytetrack.yaml")
         snapshot_time = time.time_ns()
 
-        result = classifier.predict([imgL, imgR], verbose=False)
+        result = detector.predict([imgL, imgR])
 
-        result_L = result[0].to('cpu').numpy()
-        result_R = result[1].to('cpu').numpy()
-        imgL = result_L.plot()
-        imgR = result_R.plot()
+        result_L = result[0]
+        result_R = result[1]
 
         pts2L, pts2R = [[],[]], [[],[]]
         ptsOrigL = []
 
-        for boxL in result_L.boxes:
-            
-            xyxyL, clsL, confL = boxL.xyxy[0], boxL.cls[0], boxL.conf[0]
+        if result_L.shape[1] > 0 and result_R.shape[1] > 0:
 
-            if clsL != 0:
-                continue
+            epilines = cv2.computeCorrespondEpilines(result_L.T, 1,sterio_pair.fund_mtx).reshape(-1,3)
 
-            centerL = (int((xyxyL[0] + xyxyL[2]) / 2), int((xyxyL[1] + xyxyL[3]) / 2))
+            for idx, centerL in enumerate(result_L.T):
+                xL, yL = centerL
+                # print('L', xL, yL)
+                for xR,yR in result_R.T:
+                    
+                    dist = np.abs(epilines[idx][0] * xR + epilines[idx][1] * yR + epilines[idx][2]) / np.sqrt( epilines[idx][0]**2 + epilines[idx][1]**2 )
+                    # print('R', xR ,yR)
+                    # print('dist', dist)
+                    if dist > 80:
+                        continue
 
-            for boxR in result_R.boxes:
-                xyxyR, clsR, confR = boxR.xyxy[0], boxR.cls[0], boxR.conf[0]
+                    pts2L[0].append(xL)
+                    pts2L[1].append(yL)
+                    pts2R[0].append(xR)
+                    pts2R[1].append(yR)
+                    ptsOrigL.append(centerL)
+
+                    imgL = cv2.circle(imgL,centerL,10,(0,255,0),10)
+                    imgR = cv2.circle(imgR,(xR,yR),10,(0,255,0),10)
+
                 
-                if clsR != 0:
-                    continue
-
-                centerR = (int((xyxyR[0] + xyxyR[2]) / 2), int((xyxyR[1] + xyxyR[3]) / 2))
-
-                pts2L[0].append(centerL[0])
-                pts2L[1].append(centerL[1])
-                pts2R[0].append(centerR[0])
-                pts2R[1].append(centerR[1])
-                ptsOrigL.append(centerL)
-            
         pts3 = sterio_pair.triangulate(np.array(pts2L), np.array(pts2R))
         tracking.add_locations(pts3[0,:], pts3[1,:], pts3[2,:], ptsOrigL, snapshot_time)
 
@@ -171,12 +178,37 @@ def tracking_stream(sterio_pair: SterioCameras, classifier: YOLO) -> None:
         tracking.clean()
         for line in tracking.get_lines():
             cv2.line(imgL, line[0], line[1], (0, 0, 255), 2)
+        
+        # for node, v in tracking.adjacency_list.items():
+        #     if len(v) > 0:
+        #         pts3_all[0].append(node.x)
+        #         pts3_all[1].append(node.y)
+        #         pts3_all[2].append(node.z)
+
+        if pts3.shape[1] > 0:
+            pts3_all.append(pts3)
+        #     print(pts3)
 
         # imgL = result_L.plot()
         return imgL, imgR
     
     sterio_pair.show_stream(0.5, 0.5, clsffy)
 
+    # pts3_np = np.array(pts3_all)
+    pts3_np = np.zeros((3,1))
+    for pts3 in pts3_all:
+        pts3_np = np.hstack((pts3_np, pts3))
 
-tracking_stream(sterio_pair, model)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(pts3_np[0,:],pts3_np[1,:],pts3_np[2,:],'.')
+    plt.show()
+
+# model = YOLO(f'{Path(__file__).parent}/best.pt')
+# model.to(device='cpu')
+sterio_pair = SterioCameras(["./media/test_vid_104_L.mp4", "./media/test_vid_105_R.mp4"])
+# sterio_pair = SterioCameras()
+ball_centers = collections.deque(maxlen=20)
+
+tracking_stream(sterio_pair)
 sterio_pair.close()

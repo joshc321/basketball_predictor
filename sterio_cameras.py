@@ -251,8 +251,8 @@ class SterioCameras:
 
                 # calculate fps
                 fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
-                cv2.putText(imgL, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2);
-                cv2.putText(imgR, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2);
+                cv2.putText(imgL, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
+                cv2.putText(imgR, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
 
 
                 cv2.imshow("left img", imgL)
@@ -281,11 +281,24 @@ class SterioCameras:
         self.show_stream(0.5, 0.5, clsffy)
 
     def triangulate(self, pts2L, pts2R) -> np.ndarray:
+        """
+        Sterio camera triangulation
+        
+        Arguments:
+            pts2L : 2D point locations in left camera
+            pts2R : 2D point locations in right camera
+            mtxL  : Camera matrix of left cam
+            mtxR  : Camera matrix of right cam
+            R     : Rotation matrix between left and right camera
+            T     : Translation matrix between left and right camera
 
+        Returns:
+            pts3 : 3D triangulated point locations 
+        """
         return helpers.triangulate(pts2L, pts2R, self._left_cam.mtx, self._right_cam.mtx, self.rot_mtx, self.tran_mtx)
 
 if __name__ == '__main__':
 
-    sterio_pair = SterioCameras()
-    sterio_pair.show_stream()
+    sterio_pair = SterioCameras(["./media/test_vid_L.mp4", "./media/test_vid_L.mp4"])
+    sterio_pair.show_stream(0.5, 0.5)
     sterio_pair.close()
