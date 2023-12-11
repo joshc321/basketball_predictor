@@ -3,7 +3,7 @@ from pathlib import Path
 from collections import deque
 import tools.helpers as helpers
 import time
-from ball_detector import HoughBallDetector, YOLOBallDetector
+import ball_detector
 
 # Open the video file
 # cap = cv2.VideoCapture(helpers.get_left_right_camera_idxs()[0])
@@ -12,8 +12,9 @@ cap = cv2.VideoCapture("./media/test_vid_104_L.mp4")
 
 
 # fgbg = cv2.createBackgroundSubtractorMOG2()
-detector = HoughBallDetector(1, minRadius=16, maxRadius=35)
-# detector = YOLOBallDetector()
+# detector = ball_detector.HoughBallDetector(1, minRadius=16, maxRadius=35)
+# detector = ball_detector.YOLOBallDetector()
+detector = ball_detector.HybridBallDetector(1)
 
 
 timer = cv2.getTickCount()
