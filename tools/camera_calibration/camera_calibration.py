@@ -18,7 +18,7 @@ import time
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 try:
-    from sterio_cameras import LogitechC270, SterioCameras
+    from ball_fun.sterio_cameras import LogitechC270, SterioCameras
 except ImportError as e:
     print('Unable to import sterio_cameras', e)
 

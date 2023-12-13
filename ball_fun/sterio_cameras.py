@@ -1,13 +1,13 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
 import cv2
 import tools.helpers as helpers
 import numpy as np
 from typing import Callable
-import torch
-import time
 import ultralytics
-from matplotlib import pyplot as plt
 import tools.camera_calibration.camera_calibration as camera_calibration
-from pathlib import Path
 import os
 
 
@@ -44,6 +44,8 @@ class LogitechC270:
         else:
             self._cap = cv2.VideoCapture(cam_id, apiPreference=cv2.CAP_AVFOUNDATION)
             self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'avc1'))
+        
+        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
         
         self._width, self._height = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -321,6 +323,9 @@ class SterioCameras:
 
 if __name__ == '__main__':
 
-    sterio_pair = SterioCameras(["./media/test_vid_L.mp4", "./media/test_vid_L.mp4"])
-    sterio_pair.show_stream(0.5, 0.5)
+    # DEMO
+    # sterio_pair = SterioCameras(["./media/test_vid_L.mp4", "./media/test_vid_L.mp4"])
+    sterio_pair = SterioCameras()
+    sterio_pair.show_stream()
+    # sterio_pair.show_classification_stream(ultralytics.YOLO('./YOLO_model/models/best.pt'))
     sterio_pair.close()

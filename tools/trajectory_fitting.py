@@ -57,6 +57,9 @@ def predict_future_positions(points: np.ndarray, xy_fit, xz_fit, num_steps):
     return future_positions
 
 if __name__ == '__main__':
+
+    # DEMO
+
     # Collect a set of 3D points
     # points = np.array([[2.9217, 2, 3], [2, 3, 4], [3, 4, 5]])
     points = np.array([

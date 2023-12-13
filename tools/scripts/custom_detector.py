@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import deque
 import tools.helpers as helpers
 import time
-import ball_detector
+import ball_fun.ball_detector as ball_detector
 
 # Open the video file
 # cap = cv2.VideoCapture(helpers.get_left_right_camera_idxs()[0])

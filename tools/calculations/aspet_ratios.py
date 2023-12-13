@@ -1,3 +1,6 @@
+"""
+Find scale factor for target aspect ratio
+"""
 
 def aspect_ratios(multiple: float = 32, target_ratio: float = 16/9, threshold: float = 0.02, num_iters: int = 32):
 

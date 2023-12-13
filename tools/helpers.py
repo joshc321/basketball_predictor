@@ -1,8 +1,6 @@
 import subprocess
 import numpy as np
 import cv2
-from matplotlib import pyplot as plt
-import random
 import os
 
 def get_left_right_camera_idxs(cam_name: str = "C270 HD WEBCAM"):
@@ -66,14 +64,15 @@ def determine_left_image(img1: np.ndarray, img2: np.ndarray) -> int:
     FLANN_INDEX_KDTREE = 1
     index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
     search_params = dict(checks=50)
-    flann = cv2.FlannBasedMatcher(index_params,search_params)
+    # flann = cv2.FlannBasedMatcher(index_params,search_params)
+    flann = cv2.BFMatcher()
     matches = flann.knnMatch(des1,des2,k=2)
 
     img1_cnt = 0
     img2_cnt = 0
     # ratio test as per Lowe's paper
     for i,(m,n) in enumerate(matches):
-        if m.distance < 0.1*n.distance:
+        if m.distance < 0.75*n.distance:
             x_img1 = kp1[m.queryIdx].pt[0]
             x_img2 = kp2[m.trainIdx].pt[0]
 

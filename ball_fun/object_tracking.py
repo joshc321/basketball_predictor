@@ -1,18 +1,27 @@
-import cv2
-from ultralytics import YOLO
+"""
+Object tracker class
+"""
+import sys
 from pathlib import Path
-import tools.helpers as helpers
-import collections
+sys.path.append(str(Path(__file__).parent.parent))
+
+import cv2
 import time
-from sterio_cameras import SterioCameras
+from ball_fun.sterio_cameras import SterioCameras
 import numpy as np
-import matplotlib.pyplot as plt
-import ball_detector
-import trajectory_fitting
+import ball_fun.ball_detector as ball_detector
+import tools.trajectory_fitting as trajectory_fitting
 
 class PathPoint:
+    """
+    Point object to store relevant information
+    for locations of 3d Paths
+    """
     
     def __init__(self, x: int, y: int, z: int, orig: tuple, time_stamp: int) -> None:
+        """
+        
+        """
         self.x = x
         self.y = y
         self.z = z
@@ -22,12 +31,19 @@ class PathPoint:
         self.out_degree = 0
 
     @staticmethod
-    def calc_speed(left: 'PathPoint', right: 'PathPoint'):
-        if type(right) is not PathPoint or type(left) is not PathPoint:
+    def calc_speed(point1: 'PathPoint', point2: 'PathPoint'):
+        """
+        Calculate speed between two points
+
+        Arguments:
+            point1 : PathPoint object of first point
+            point2 : PathPoint object of second point
+        """
+        if type(point2) is not PathPoint or type(point1) is not PathPoint:
             raise NotImplementedError('Subtractin only supported between PathPoint objects')
         
-        change_dist = np.sqrt((left.x - right.x)**2 + (left.y - right.y)**2 + (left.z - right.z)**2)
-        change_time = (right.time_stamp - left.time_stamp) / 1e9
+        change_dist = np.sqrt((point1.x - point2.x)**2 + (point1.y - point2.y)**2 + (point1.z - point2.z)**2)
+        change_time = (point2.time_stamp - point1.time_stamp) / 1e9
 
         return np.abs(change_dist / change_time)
     
@@ -116,6 +132,13 @@ class ProjectileTracking:
         self.last_clean_time = curr_time
 
     def get_lines(self) -> list[tuple[tuple[int, int]]]:
+        """
+        Get all edges of current graph
+
+        Returns:
+            list of point pairs (x,y) for start and end pos 
+              of the path
+        """
 
         lines = []
 
@@ -195,7 +218,7 @@ class ProjectileTracking:
             pts3d = self.path_to_numpy(path)
             trajXY, trajXZ, res = trajectory_fitting.fit_trajectory(pts3d)
 
-            # TODO create heuristic for balancing pathlength and res
+            # TODO create heuristic for balancing pathlength and res ... maybe
 
             if best_trajXY is None:
                 best_trajXY, best_trajXZ, bestRes, bestPath_pts = trajXY, trajXZ, res, pts3d
@@ -213,10 +236,8 @@ class ProjectileTracking:
 def tracking_stream(sterio_pair: SterioCameras) -> None:
 
     tracking = ProjectileTracking(1, 0, 20)
-    detector = ball_detector.HoughBallDetector(2, minRadius=16, maxRadius=35)
-    # detector = ball_detector.HybridBallDetector(2)
-    # pts3_all = [[],[],[]]
-    pts3_all = []
+    # detector = ball_detector.HoughBallDetector(2, minRadius=16, maxRadius=35)
+    detector = ball_detector.HybridBallDetector(2)
 
     def clsffy(imgL, imgR):
 
@@ -267,36 +288,16 @@ def tracking_stream(sterio_pair: SterioCameras) -> None:
             imgL = cv2.circle(imgL, (pts2LP_traj[0,i], pts2LP_traj[1,i]), 2, (255,0,255),1)
             imgR = cv2.circle(imgR, (pts2RP_traj[0,i], pts2RP_traj[1,i]), 2, (255,0,255),1)
         
-        # for node, v in tracking.adjacency_list.items():
-        #     if len(v) > 0:
-        #         pts3_all[0].append(node.x)
-        #         pts3_all[1].append(node.y)
-        #         pts3_all[2].append(node.z)
+  
 
-        if pts3.shape[1] > 0:
-            pts3_all.append(pts3)
-            # print(pts3)
-
-        # if cv2.waitKey(0) & 0xFF == ord("q"):
-        #     return
-
-        # imgL = result_L.plot()
         return imgL, imgR
     
     sterio_pair.show_stream(0.5, 0.5, clsffy)
 
-    # pts3_np = np.array(pts3_all)
-    pts3_np = np.zeros((3,1))
-    for pts3 in pts3_all:
-        pts3_np = np.hstack((pts3_np, pts3))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(pts3_np[0,:],pts3_np[1,:],pts3_np[2,:],'.')
-    plt.show()
 
 if __name__ == '__main__':
 
+    # DEMO
     sterio_pair = SterioCameras(["./media/test_vid_104_L.mp4", "./media/test_vid_105_R.mp4"])
 
     tracking_stream(sterio_pair)

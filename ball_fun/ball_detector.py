@@ -1,3 +1,8 @@
+"""
+Different Ball detection
+Algorithms
+"""
+
 import abc
 import numpy as np
 import cv2
@@ -11,7 +16,7 @@ class BallDetector(abc.ABC):
     Top level class for Ball detection algorithms
     """
 
-    def predict(self, images: list[np.ndarray]) -> list[np.ndarray]:
+    def predict(self, images: list[np.ndarray], verbose: bool = False) -> list[np.ndarray]:
         """
         Predicts locations of the ball on input images
 
@@ -24,6 +29,7 @@ class BallDetector(abc.ABC):
                     element having shape (2,P) 
                     with P being the number of
                     points found with type int
+            verbose : enable verbose output
         """
         pass
 
@@ -90,14 +96,12 @@ class HoughBallDetector(BallDetector):
         with self.list_lock:
             return_list[index] = center
 
-    def predict(self, images: list[np.ndarray]) -> list[np.ndarray]:
+    def predict(self, images: list[np.ndarray], verbose: bool = False) -> list[np.ndarray]:
 
         centers = [[],[]]
-        # s = time.time_ns()
-        # for idx, frame in enumerate(images):
-        #     res = self.single_predict(idx, frame, self.fgbg[idx])
-        #     centers.append(res)
 
+        s = time.time_ns()
+       
         # multithreaded prediction
         thread_list = []
         for idx, frame in enumerate(images):
@@ -107,19 +111,24 @@ class HoughBallDetector(BallDetector):
         
         for t in thread_list:
             t.join()
-
-        # print('prediction took', round((time.time_ns() - s)/1e6 , 2), 'ms')
+        
+        if verbose == True:
+            print('prediction took', round((time.time_ns() - s)/1e6 , 2), 'ms')
 
         return centers
     
 class YOLOBallDetector(BallDetector):
     
-    def __init__(self) -> None:
-        self.model = YOLO(f'{Path(__file__).parent}/best.pt')
+    def __init__(self, model_path: str = f'{Path(__file__).parent.parent}/YOLO_model/models/best.pt') -> None:
+        """
+        YOLO Ball detector init
+        Arguments:
+            model_path : path to YOLO model weigths file
+        """
+        self.model = YOLO(model_path)
         self.model.to(device='cpu')
 
-    def predict(self, images: list[np.ndarray]) -> list[np.ndarray]:
-
+    def predict(self, images: list[np.ndarray], verbose: bool = False) -> list[np.ndarray]:
 
         s = time.time_ns()
 
@@ -143,7 +152,8 @@ class YOLOBallDetector(BallDetector):
             
             centers.append(np.array(pts2))
         
-        print('prediction took', round((time.time_ns() - s)/1e6 , 2), 'ms')
+        if verbose == True:
+            print('prediction took', round((time.time_ns() - s)/1e6 , 2), 'ms')
 
         return centers
 
@@ -155,7 +165,7 @@ class HybridBallDetector(BallDetector):
     subtraction with HOUGH circles to track the ball for speed
     """
 
-    def __init__(self, num_predictors: int) -> None:
+    def __init__(self, num_predictors: int, model_path: str = f'{Path(__file__).parent.parent}/YOLO_model/models/best.pt') -> None:
         """
         Hybrid ball classifier
 
@@ -163,9 +173,11 @@ class HybridBallDetector(BallDetector):
             num_predictors : number of predictors needed to predict on images
                              should be equal to the number of images passed
                              into the predict method
+
+            model_path : path to YOLO model weights file
         """
          
-        self.model = YOLO(f'{Path(__file__).parent}/yolo-11-26.pt')
+        self.model = YOLO(model_path)
         self.model.to(device='cpu')
 
         self.fgbg = []
@@ -174,7 +186,7 @@ class HybridBallDetector(BallDetector):
         
         self.hough_params = {
             "dp": 1,
-            "minDist": 20,
+            "minDist": 100,
             "param1": 300,
             "param2": 20,
             "minRadius": 20,
@@ -227,12 +239,33 @@ class HybridBallDetector(BallDetector):
         if len(self.hough_params["radiusVals"]) > 50:
             as_np = np.array(self.hough_params["radiusVals"])
             self.hough_params["converged"] = True
-            self.hough_params["minRadius"] = int(np.median(as_np) - as_np.std() / 2)
-            self.hough_params["maxRadius"] = int(np.median(as_np) + as_np.std() / 2)
+
+            gap_min = np.median(as_np) - as_np.min()
+            gap_max = as_np.max() - np.median(as_np)
+
+            gap_v = gap_min if gap_min < gap_max else gap_max
+
+            self.hough_params["minRadius"] = int(np.median(as_np) - gap_v)
+            self.hough_params["maxRadius"] = int(np.median(as_np) + gap_v)
+            print(f'determined vals minR {self.hough_params["minRadius"]} maxR {self.hough_params["maxRadius"]}')
+            print(self.hough_params["radiusVals"])
+            print(as_np.mean(), as_np.min(), as_np.max(), np.median(as_np), as_np.std(), as_np.var())
 
         return centers
 
-    def single_predict(self, index, image, fgbg, return_list) -> np.ndarray:
+    def single_predict(self, index: int, image: np.ndarray, fgbg: cv2.BackgroundSubtractor, return_list: list) -> np.ndarray:
+        """
+        Predict ball on a single frame
+        Multithread safe for distinct objects
+
+        Arguments:
+            index : index of return_list to place found centers
+            image : image to detect on
+            fgbg  : cv2 background subtractor object
+            return_list : list where found points are returned in
+        """
+        
+        
         # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         motion_mask = fgbg.apply(image, -1)
         # ret, motion_mask = cv2.threshold(motion_mask, 127, 255, cv2.THRESH_BINARY)
@@ -265,7 +298,7 @@ class HybridBallDetector(BallDetector):
         with self.list_lock:
             return_list[index] = center
 
-    def predict(self, images: list[np.ndarray]) -> list[np.ndarray]:
+    def predict(self, images: list[np.ndarray], verbose: bool = False) -> list[np.ndarray]:
         
         s = time.time_ns()
 
@@ -284,6 +317,7 @@ class HybridBallDetector(BallDetector):
             for t in thread_list:
                 t.join()
 
-        # print('prediction took', round((time.time_ns() - s)/1e6 , 2), 'ms')
+        if verbose == True:
+            print('prediction took', round((time.time_ns() - s)/1e6 , 2), 'ms')
 
         return centers
