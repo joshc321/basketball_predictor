@@ -1,3 +1,8 @@
+"""
+Script to compare frames pulled from 
+stereo cameras
+"""
+
 import cv2
 from pathlib import Path
 import tools.helpers as helpers

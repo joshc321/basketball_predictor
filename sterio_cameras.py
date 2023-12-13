@@ -151,6 +151,11 @@ class SterioCameras:
         self._right_cam.close()
 
     def calibrate_cameras(self):
+        """
+        Run camera calibration on left and right cameras
+        with stereo pair positioning with left camera
+        at center of world coords
+        """
         self._left_cam.calibrate_camera('./tools/camera_calibration/imgs/left_cam')
         self._right_cam.calibrate_camera('./tools/camera_calibration/imgs/right_cam')
 
@@ -160,6 +165,23 @@ class SterioCameras:
             self._right_cam.mtx, 
             self._right_cam.dist, 
             Path('./tools/camera_calibration/imgs/synced'))
+        
+    def project(self, pts3: np.ndarray):
+        """
+        Project points onto left and right camera plain from pts3
+        """
+
+        pts_left = self._left_cam.mtx @ pts3
+        pts_left = np.divide(pts_left, pts_left[-1,:], where=pts_left[-1,:] != 0 )
+        pts2_left = pts_left[0:2, :].astype(int)
+
+        # pts_right = self.rot_mtx.T @ (pts3 - self.tran_mtx)
+        pts_right = (self.rot_mtx @ pts3) + self.tran_mtx
+        pts_right = self._right_cam.mtx @ pts_right
+        pts_right = np.divide(pts_right, pts_right[-1,:], where=pts_right[-1,:] != 0)
+        pts2_right = pts_right[0:2, :].astype(int)
+
+        return pts2_left, pts2_right
         
 
 

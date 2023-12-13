@@ -1,3 +1,8 @@
+"""
+script to run custom ball
+detection scripts on video frames 
+"""
+
 import cv2
 from pathlib import Path
 from collections import deque

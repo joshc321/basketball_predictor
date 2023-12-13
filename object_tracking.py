@@ -8,6 +8,7 @@ from sterio_cameras import SterioCameras
 import numpy as np
 import matplotlib.pyplot as plt
 import ball_detector
+import trajectory_fitting
 
 class PathPoint:
     
@@ -17,6 +18,8 @@ class PathPoint:
         self.z = z
         self.orig = orig
         self.time_stamp  = time_stamp
+        self.in_degree = 0
+        self.out_degree = 0
 
     @staticmethod
     def calc_speed(left: 'PathPoint', right: 'PathPoint'):
@@ -27,6 +30,12 @@ class PathPoint:
         change_time = (right.time_stamp - left.time_stamp) / 1e9
 
         return np.abs(change_dist / change_time)
+    
+    def __str__(self) -> str:
+        return f'X:{self.x} Y:{self.y} Z:{self.z}'
+    
+    def __repr__(self) -> str:
+        return f'P({self.x} {self.y} {self.z})'
 
 class ProjectileTracking:
 
@@ -47,8 +56,6 @@ class ProjectileTracking:
 
         self.adjacency_list = {}
 
-        self.timeline = []
-
     def add_locations(self, x: np.ndarray, y: np.ndarray, z: np.ndarray, ptsOrigL: list, time_stamp: int) -> None:
         """
         Add a point to be tracked
@@ -64,15 +71,19 @@ class ProjectileTracking:
         for i in range(len(x)):
             new_loc = PathPoint(x[i],y[i],z[i],ptsOrigL[i],time_stamp)
             new_locs.append(new_loc)
-            self.timeline.append(new_loc)
 
         for point in self.adjacency_list.keys():
+            if point.out_degree != 0:
+                continue
             for loc in new_locs:
                 speed = PathPoint.calc_speed(point, loc)
                 # print('speed', speed / 1000, 'm/s')
 
                 if self.min_speed <= speed <= self.max_speed:
-                    self.adjacency_list[point].add(new_loc)
+                    self.adjacency_list[point].add(loc)
+                    point.out_degree += 1
+                    loc.in_degree += 1
+
 
         for new_loc in new_locs:
             self.adjacency_list[new_loc] = set()
@@ -92,14 +103,15 @@ class ProjectileTracking:
         for point in list(self.adjacency_list.keys()):
             if (curr_time - point.time_stamp) > self.max_time:
                 removed.add(point)
+
+                for node in self.adjacency_list[point]:
+                    node.in_degree -= 1
+
                 self.adjacency_list.pop(point)
         
         for point in self.adjacency_list.keys():
             self.adjacency_list[point] = self.adjacency_list[point] - removed
-
-        for idx, point in enumerate(self.timeline):
-            if (curr_time - point.time_stamp) > self.max_time:
-                self.timeline = self.timeline[idx:]
+            point.out_degree = len(self.adjacency_list[point])
 
         self.last_clean_time = curr_time
 
@@ -107,25 +119,102 @@ class ProjectileTracking:
 
         lines = []
 
-        # for start_node, end_list in self.adjacency_list.items():
+        for start_node, end_list in self.adjacency_list.items():
 
-        #     for node in end_list:
-        #         lines.append( (( start_node.orig[0], start_node.orig[1] ), (node.orig[0], node.orig[1])) )
-
-        for i in range(1, len(self.timeline)):
-            lineL = self.timeline[i - 1]
-            lineR = self.timeline[i]
-
-            lines.append( (( lineL.orig[0], lineL.orig[1] ), (lineR.orig[0], lineR.orig[1])) )
+            for node in end_list:
+                lines.append( (( start_node.orig[0], start_node.orig[1] ), (node.orig[0], node.orig[1])) )
 
         return lines
+    
+    def get_paths(self, start_node: PathPoint = None) -> list[list[PathPoint]]:
+        """
+        Gathers a list of possible paths for a projectile
+        with the current location structures
+
+        Returns:
+            (paths) : list of possible PathPoint paths 
+        """
+
+        if start_node is None:
+            all_paths = []
+            for node in self.adjacency_list.keys():
+                if node.in_degree == 0:
+                    path = self.get_paths(node)
+                    all_paths.extend(path)
+            return all_paths
+
+        # base condition
+        if len(self.adjacency_list[start_node]) == 0:
+            return [[start_node]]
+    
+        all_paths = []
+        
+        for node in self.adjacency_list[start_node]:
+            path = self.get_paths(node)
+            all_paths.extend(path)
+
+        for path in all_paths:
+            path.append(start_node)
+
+        return all_paths
+    
+    def path_to_numpy(self, path: list[PathPoint]) -> np.ndarray:
+        """
+        Converts a Path to numpy array of x,y,z coords
+
+        Arguments:
+            path : list of PathPoint forming the path
+
+        Returns:
+            (np.ndarray) : paths as ndarray of shape (3,N)
+        """
+
+        np_array = np.zeros((3,len(path)))
+        
+        for idx, point in enumerate(path):
+
+            np_array[0,idx] = point.x
+            np_array[1,idx] = point.y
+            np_array[2,idx] = point.z
+
+        return np.flip(np_array, axis=1)
+        
+    
+    def get_best_trajectory_pts(self) -> np.ndarray:
+        """
+        Determines best trajectory to fit to trackings
+
+        Returns:
+            pts3d : np.ndarray((3,N))
+        """
+
+        paths = self.get_paths()
+
+        best_trajXY, best_trajXZ, bestRes, bestPath_pts = None, None, None, None
+        for path in paths:
+            pts3d = self.path_to_numpy(path)
+            trajXY, trajXZ, res = trajectory_fitting.fit_trajectory(pts3d)
+
+            # TODO create heuristic for balancing pathlength and res
+
+            if best_trajXY is None:
+                best_trajXY, best_trajXZ, bestRes, bestPath_pts = trajXY, trajXZ, res, pts3d
+
+            elif res < bestRes:
+                best_trajXY, best_trajXZ, bestRes, bestPath_pts = trajXY, trajXZ, res, pts3d
+
+        if best_trajXY is None:
+            return np.ndarray((3,0))
+        
+        return trajectory_fitting.predict_future_positions(bestPath_pts, best_trajXY, best_trajXZ, 100)
 
 
 
 def tracking_stream(sterio_pair: SterioCameras) -> None:
 
-    tracking = ProjectileTracking(2.0, 1, 10)
+    tracking = ProjectileTracking(1, 0, 20)
     detector = ball_detector.HoughBallDetector(2, minRadius=16, maxRadius=35)
+    # detector = ball_detector.HybridBallDetector(2)
     # pts3_all = [[],[],[]]
     pts3_all = []
 
@@ -165,19 +254,18 @@ def tracking_stream(sterio_pair: SterioCameras) -> None:
                     imgL = cv2.circle(imgL,centerL,10,(0,255,0),10)
                     imgR = cv2.circle(imgR,(xR,yR),10,(0,255,0),10)
 
-                
         pts3 = sterio_pair.triangulate(np.array(pts2L), np.array(pts2R))
         tracking.add_locations(pts3[0,:], pts3[1,:], pts3[2,:], ptsOrigL, snapshot_time)
-
-        # for i in range(1, len(ball_centers)):
-        #     if ball_centers[i - 1] is None or ball_centers[i] is None:
-        #         continue
-        #     thickness = int(np.sqrt(20 / float(i + 1)) * 2.5)
-        #     cv2.line(imgL, ball_centers[i - 1], ball_centers[i], (0, 0, 255), thickness)
 
         tracking.clean()
         for line in tracking.get_lines():
             cv2.line(imgL, line[0], line[1], (0, 0, 255), 2)
+
+        pts3_traj = tracking.get_best_trajectory_pts()
+        pts2LP_traj, pts2RP_traj = sterio_pair.project(pts3_traj)
+        for i in range(pts2LP_traj.shape[1]):
+            imgL = cv2.circle(imgL, (pts2LP_traj[0,i], pts2LP_traj[1,i]), 2, (255,0,255),1)
+            imgR = cv2.circle(imgR, (pts2RP_traj[0,i], pts2RP_traj[1,i]), 2, (255,0,255),1)
         
         # for node, v in tracking.adjacency_list.items():
         #     if len(v) > 0:
@@ -187,7 +275,10 @@ def tracking_stream(sterio_pair: SterioCameras) -> None:
 
         if pts3.shape[1] > 0:
             pts3_all.append(pts3)
-        #     print(pts3)
+            # print(pts3)
+
+        # if cv2.waitKey(0) & 0xFF == ord("q"):
+        #     return
 
         # imgL = result_L.plot()
         return imgL, imgR
@@ -204,11 +295,9 @@ def tracking_stream(sterio_pair: SterioCameras) -> None:
     ax.plot(pts3_np[0,:],pts3_np[1,:],pts3_np[2,:],'.')
     plt.show()
 
-# model = YOLO(f'{Path(__file__).parent}/best.pt')
-# model.to(device='cpu')
-sterio_pair = SterioCameras(["./media/test_vid_104_L.mp4", "./media/test_vid_105_R.mp4"])
-# sterio_pair = SterioCameras()
-ball_centers = collections.deque(maxlen=20)
+if __name__ == '__main__':
 
-tracking_stream(sterio_pair)
-sterio_pair.close()
+    sterio_pair = SterioCameras(["./media/test_vid_104_L.mp4", "./media/test_vid_105_R.mp4"])
+
+    tracking_stream(sterio_pair)
+    sterio_pair.close()

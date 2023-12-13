@@ -1,3 +1,8 @@
+"""
+script to record video with
+stereo cameras
+"""
+
 import cv2
 from ultralytics import YOLO
 from pathlib import Path

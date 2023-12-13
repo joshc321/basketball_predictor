@@ -37,6 +37,8 @@ class HoughBallDetector(BallDetector):
             num_predictors : number of predictors needed to predict on images
                              should be equal to the number of images passed
                              into the predict method
+            minRadius : minimum radius threshold for detecting balls
+            maxRadius : maximum radius threshold for detecting balls
         """
         self.fgbg = []
         for _ in range(num_predictors):
@@ -54,7 +56,17 @@ class HoughBallDetector(BallDetector):
         self.list_lock = threading.Lock()
 
 
-    def single_predict(self, index, image, fgbg, return_list) -> np.ndarray:
+    def single_predict(self, index: int, image: np.ndarray, fgbg: cv2.BackgroundSubtractor, return_list: list) -> None:
+        """
+        Predict ball on a single frame
+        Multithread safe for distinct objects
+
+        Arguments:
+            index : index of return_list to place found centers
+            image : image to detect on
+            fgbg  : cv2 background subtractor object
+            return_list : list where found points are returned in
+        """
         # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         motion_mask = fgbg.apply(image, -1)
         # ret, motion_mask = cv2.threshold(motion_mask, 127, 255, cv2.THRESH_BINARY)
@@ -86,6 +98,7 @@ class HoughBallDetector(BallDetector):
         #     res = self.single_predict(idx, frame, self.fgbg[idx])
         #     centers.append(res)
 
+        # multithreaded prediction
         thread_list = []
         for idx, frame in enumerate(images):
             t = threading.Thread(target=self.single_predict, args=(idx, frame, self.fgbg[idx], centers))
@@ -143,6 +156,15 @@ class HybridBallDetector(BallDetector):
     """
 
     def __init__(self, num_predictors: int) -> None:
+        """
+        Hybrid ball classifier
+
+        Arguments:
+            num_predictors : number of predictors needed to predict on images
+                             should be equal to the number of images passed
+                             into the predict method
+        """
+         
         self.model = YOLO(f'{Path(__file__).parent}/yolo-11-26.pt')
         self.model.to(device='cpu')
 

@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import time
 
-def fit_trajectory(points: np.ndarray):
+def fit_trajectory(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     """
     Fits a trajectory to a set of 3D points.
 
@@ -10,13 +10,22 @@ def fit_trajectory(points: np.ndarray):
         points (np.ndarray): The 3D points to fit the trajectory to of shape (3,N).
 
     Returns:
-        (np.ndarray): The coefficients of the fitted trajectory
+        (xy_traj, xz_traj, residuals): The coefficients of the fitted trajectory and residuals
     """
 
     x, y, z = points
 
     xy_fit, resxy, _,_,_ = np.polyfit(x,y,2, full=True)
     xz_fit, resxz, _,_,_ = np.polyfit(x,z,2, full=True)
+
+    if resxy.shape[0] > 0:
+        resxy = resxy[0]
+    else:
+        resxy = 0
+    if resxz.shape[0] > 0:
+        resxz = resxz[0]
+    else:
+        resxz = 0
 
     return np.poly1d(xy_fit), np.poly1d(xz_fit), resxz + resxy
 
@@ -47,28 +56,28 @@ def predict_future_positions(points: np.ndarray, xy_fit, xz_fit, num_steps):
 
     return future_positions
 
+if __name__ == '__main__':
+    # Collect a set of 3D points
+    # points = np.array([[2.9217, 2, 3], [2, 3, 4], [3, 4, 5]])
+    points = np.array([
+        [292.17,484.64,775.81,1055.8],
+        [338.28,423.92,480.82,451.5],
+        [3685.4,3703.5,3694.6,3651.9]
+    ])
 
-# Collect a set of 3D points
-# points = np.array([[2.9217, 2, 3], [2, 3, 4], [3, 4, 5]])
-points = np.array([
-    [292.17,484.64,775.81,1055.8],
-    [338.28,423.92,480.82,451.5],
-    [3685.4,3703.5,3694.6,3651.9]
-])
+    # Fit a trajectory to the points
+    s = time.time_ns()
+    xy_fit, xz_fit, res = fit_trajectory(points)
 
-# Fit a trajectory to the points
-s = time.time_ns()
-xy_fit, xz_fit, res = fit_trajectory(points)
+    # Predict the future positions of the basketball
+    num_steps = 100
+    future_positions = predict_future_positions(points, xy_fit, xz_fit, num_steps)
 
-# Predict the future positions of the basketball
-num_steps = 100
-future_positions = predict_future_positions(points, xy_fit, xz_fit, num_steps)
+    print(time.time_ns() - s)
+    print('error', res)
 
-print(time.time_ns() - s)
-print('error', res)
-
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.plot(points[0,:], points[1,:], points[2,:], 'bo')
-ax.plot(future_positions[0,:],future_positions[1,:],future_positions[2,:], color='r')
-plt.show()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(points[0,:], points[1,:], points[2,:], 'bo')
+    ax.plot(future_positions[0,:],future_positions[1,:],future_positions[2,:], color='r')
+    plt.show()
