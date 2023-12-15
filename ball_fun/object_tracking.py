@@ -11,6 +11,8 @@ from ball_fun.sterio_cameras import SterioCameras
 import numpy as np
 import ball_fun.ball_detector as ball_detector
 import tools.trajectory_fitting as trajectory_fitting
+from parameters import Parameters
+from ball_fun.the_hooop import HoopClassifier
 
 class PathPoint:
     """
@@ -209,6 +211,8 @@ class ProjectileTracking:
 
         Returns:
             pts3d : np.ndarray((3,N))
+            trajXY : trajectory for Y
+            trajXZ : trajectory for Z
         """
 
         paths = self.get_paths()
@@ -216,6 +220,10 @@ class ProjectileTracking:
         best_trajXY, best_trajXZ, bestRes, bestPath_pts = None, None, None, None
         for path in paths:
             pts3d = self.path_to_numpy(path)
+
+            if pts3d.shape[1] < 3:
+                continue
+
             trajXY, trajXZ, res = trajectory_fitting.fit_trajectory(pts3d)
 
             # TODO create heuristic for balancing pathlength and res ... maybe
@@ -227,17 +235,19 @@ class ProjectileTracking:
                 best_trajXY, best_trajXZ, bestRes, bestPath_pts = trajXY, trajXZ, res, pts3d
 
         if best_trajXY is None:
-            return np.ndarray((3,0))
+            return np.ndarray((3,0)), best_trajXY, best_trajXZ
         
-        return trajectory_fitting.predict_future_positions(bestPath_pts, best_trajXY, best_trajXZ, 100)
+        return trajectory_fitting.predict_future_positions(bestPath_pts, best_trajXY, best_trajXZ, 100), best_trajXY, best_trajXZ
 
 
 
 def tracking_stream(sterio_pair: SterioCameras) -> None:
 
-    tracking = ProjectileTracking(1, 0, 20)
-    # detector = ball_detector.HoughBallDetector(2, minRadius=16, maxRadius=35)
-    detector = ball_detector.HybridBallDetector(2)
+    tracking = ProjectileTracking(Parameters.max_time, Parameters.min_speed, Parameters.max_speed)
+    detector = ball_detector.HoughBallDetector(2, minRadius=Parameters.minRadius, maxRadius=Parameters.maxRadius)
+    # detector = ball_detector.HybridBallDetector(2)
+    hoop_pred = HoopClassifier()
+    hoop_pred.locate(sterio_pair)
 
     def clsffy(imgL, imgR):
 
@@ -279,15 +289,28 @@ def tracking_stream(sterio_pair: SterioCameras) -> None:
         tracking.add_locations(pts3[0,:], pts3[1,:], pts3[2,:], ptsOrigL, snapshot_time)
 
         tracking.clean()
-        for line in tracking.get_lines():
-            cv2.line(imgL, line[0], line[1], (0, 0, 255), 2)
+        # for line in tracking.get_lines():
+        #     cv2.line(imgL, line[0], line[1], (0, 0, 255), 2)
 
-        pts3_traj = tracking.get_best_trajectory_pts()
-        pts2LP_traj, pts2RP_traj = sterio_pair.project(pts3_traj)
-        for i in range(pts2LP_traj.shape[1]):
-            imgL = cv2.circle(imgL, (pts2LP_traj[0,i], pts2LP_traj[1,i]), 2, (255,0,255),1)
-            imgR = cv2.circle(imgR, (pts2RP_traj[0,i], pts2RP_traj[1,i]), 2, (255,0,255),1)
-        
+        pts3_traj, trajXY, trajXZ = tracking.get_best_trajectory_pts()
+
+        if trajXY is not None and trajXZ is not None:
+            make_prob = hoop_pred.make_prob(trajXY, trajXZ)
+
+            if make_prob > 0.85:
+                cv2.putText(imgL, "YIPPIE!!! ", (100,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
+                cv2.putText(imgR, "YIPPIE!!! ", (100,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
+            elif make_prob > 0.1:
+                cv2.putText(imgL, "BOOOO!!! ", (100,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
+                cv2.putText(imgR, "BOOOO!!! ", (100,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
+
+            # only draw trajectories with prob of going in > X
+            if make_prob > 0.1:
+                pts2LP_traj, pts2RP_traj = sterio_pair.project(pts3_traj)
+                for i in range(1, pts2LP_traj.shape[1]):
+                    imgL = cv2.line(imgL, (pts2LP_traj[0,i], pts2LP_traj[1,i]), (pts2LP_traj[0,i-1], pts2LP_traj[1,i-1]), (0,0,255),2)
+                    imgR = cv2.line(imgR, (pts2RP_traj[0,i], pts2RP_traj[1,i]), (pts2RP_traj[0,i-1], pts2RP_traj[1,i-1]), (0,0,255),2)
+
   
 
         return imgL, imgR

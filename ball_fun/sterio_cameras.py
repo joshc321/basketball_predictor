@@ -311,10 +311,6 @@ class SterioCameras:
         Arguments:
             pts2L : 2D point locations in left camera
             pts2R : 2D point locations in right camera
-            mtxL  : Camera matrix of left cam
-            mtxR  : Camera matrix of right cam
-            R     : Rotation matrix between left and right camera
-            T     : Translation matrix between left and right camera
 
         Returns:
             pts3 : 3D triangulated point locations 

@@ -2,10 +2,11 @@
 script to record video with
 stereo cameras
 """
-
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 import cv2
 from ultralytics import YOLO
-from pathlib import Path
 import tools.helpers as helpers
 import threading
 import queue

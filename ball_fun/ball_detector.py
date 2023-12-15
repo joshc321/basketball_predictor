@@ -10,6 +10,9 @@ from ultralytics import YOLO
 from pathlib import Path
 import time
 import threading
+import sys
+sys.path.append(str(Path(__file__).parent.parent))
+from parameters import Parameters
 
 class BallDetector(abc.ABC):
     """
@@ -53,10 +56,10 @@ class HoughBallDetector(BallDetector):
         # HoughCircles params
         self.minRadius = minRadius
         self.maxRadius = maxRadius
-        self.dp = 1
-        self.minDist = 20
-        self.param1 = 300
-        self.param2 = 20
+        self.dp = Parameters.dp
+        self.minDist = Parameters.minDist
+        self.param1 = Parameters.param1
+        self.param2 = Parameters.param2
 
         # concurrent vars (KINDA)
         self.list_lock = threading.Lock()
@@ -185,12 +188,12 @@ class HybridBallDetector(BallDetector):
             self.fgbg.append(cv2.createBackgroundSubtractorMOG2(history=2, varThreshold=150, detectShadows=False))
         
         self.hough_params = {
-            "dp": 1,
-            "minDist": 100,
-            "param1": 300,
-            "param2": 20,
-            "minRadius": 20,
-            "maxRadius": 25,
+            "dp": Parameters.dp,
+            "minDist": Parameters.minDist,
+            "param1": Parameters.param1,
+            "param2": Parameters.param2,
+            "minRadius": Parameters.minRadius,
+            "maxRadius": Parameters.maxRadius,
             "radiusVals": [],
             "converged": False,
         }

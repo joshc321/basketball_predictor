@@ -16,7 +16,7 @@ def fit_trajectory(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     x, y, z = points
 
     xy_fit, resxy, _,_,_ = np.polyfit(x,y,2, full=True)
-    xz_fit, resxz, _,_,_ = np.polyfit(x,z,2, full=True)
+    xz_fit, resxz, _,_,_ = np.polyfit(x,z,1, full=True)
 
     if resxy.shape[0] > 0:
         resxy = resxy[0]
@@ -43,7 +43,11 @@ def predict_future_positions(points: np.ndarray, xy_fit, xz_fit, num_steps):
     """
 
     # Get the current position of the basketball
-    x_vals = np.linspace(points[0,0], points[0,-1] + 1000, num_steps)
+
+    extension = 3000
+    if points[0, -1] - points[0,0] < 0:
+        extension *= -1
+    x_vals = np.linspace(points[0,0], points[0,-1] + extension, num_steps)
 
     # Predict the future positions
     future_positions = np.zeros((3, num_steps))

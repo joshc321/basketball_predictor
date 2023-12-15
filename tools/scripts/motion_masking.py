@@ -9,8 +9,11 @@ import numpy as np
 
 # Open the video file
 # cap = cv2.VideoCapture(helpers.get_left_right_camera_idxs()[0])
-cap = cv2.VideoCapture(0)
-# cap = cv2.VideoCapture("./media/test_vid_104_L.mp4")
+# cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture("./media/demo2_right.mp4")
+
+# for i in range(205):
+#     cap.grab()
 
 
 fgbg = cv2.createBackgroundSubtractorMOG2(history=2, varThreshold=150, detectShadows=False)
@@ -41,16 +44,17 @@ while cap.isOpened():
 
         masked = med_gaus_blur
 
-        circles = cv2.HoughCircles(masked, cv2.HOUGH_GRADIENT, 1, 100, param1=300, param2=20, minRadius=30, maxRadius=55)
+        circles = cv2.HoughCircles(masked, cv2.HOUGH_GRADIENT, 1, 300, param1=300, param2=12, minRadius=25, maxRadius=50)
 
         if circles is not None:
             circles = np.uint16(np.around(circles))
             for i in circles[0,:]:
                 # draw the outer circle
-                print('radius', i[2])
+                print('Norm radius', i[2])
                 cv2.circle(frame,(i[0],i[1]),i[2],(0,255,0),2)
                 # draw the center of the circle
                 cv2.circle(frame,(i[0],i[1]),2,(0,0,255),3)
+
 
 
         frame = cv2.resize(frame, (frame.shape[1] // 2, frame.shape[0] // 2))
@@ -62,7 +66,7 @@ while cap.isOpened():
         cv2.imshow("Motion Mask", med_gaus_blur)
         timer = cv2.getTickCount()
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        if cv2.waitKey(0) & 0xFF == ord("q"):
             break
 
     else:
