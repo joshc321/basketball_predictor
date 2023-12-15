@@ -1,8 +1,4 @@
 .DS_Store
 basketball_data*/
 runs/
-*.pt
-*.avi
-*.mov
-*.mp4
 __pycache__/
